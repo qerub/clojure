@@ -13,7 +13,7 @@
   clojure.main
   (:refer-clojure :exclude [with-bindings])
   (:import (clojure.lang Compiler Compiler$CompilerException
-                         LineNumberingPushbackReader RT))
+                         DynamicClassLoader LineNumberingPushbackReader RT))
   ;;(:use [clojure.repl :only (demunge root-cause stack-element-str)])
   )
 
@@ -28,7 +28,7 @@
   (.getClassName el))
 
 (def ^:private demunge-map
-  (into {"$" "/"} (map (fn [[k v]] [v k]) clojure.lang.Compiler/CHAR_MAP)))
+  (into {"$" "/"} (map (fn [[k v]] [v k]) Compiler/CHAR_MAP)))
 
 (def ^:private demunge-pattern
   (re-pattern (apply str (interpose "|" (map #(str "\\Q" % "\\E")
@@ -61,8 +61,8 @@
   {:added "1.3"}
   [^Throwable t]
   (loop [cause t]
-    (if (and (instance? clojure.lang.Compiler$CompilerException cause)
-             (not= (.source ^clojure.lang.Compiler$CompilerException cause) "NO_SOURCE_FILE"))
+    (if (and (instance? Compiler$CompilerException cause)
+             (not= (.source ^Compiler$CompilerException cause) "NO_SOURCE_FILE"))
       cause
       (if-let [cause (.getCause cause)]
         (recur cause)
@@ -175,7 +175,7 @@
     (binding [*out* *err*]
       (println (str (-> ex class .getSimpleName)
                     " " (.getMessage ex) " "
-                    (when-not (instance? clojure.lang.Compiler$CompilerException ex)
+                    (when-not (instance? Compiler$CompilerException ex)
                       (str " " (if el (stack-element-str el) "[trace missing]"))))))))
 
 (def ^{:doc "A sequence of lib specs that are applied to `require`
@@ -236,7 +236,7 @@ by default when a new command-line REPL is started."} repl-requires
        default: repl-caught"
   [& options]
   (let [cl (.getContextClassLoader (Thread/currentThread))]
-    (.setContextClassLoader (Thread/currentThread) (clojure.lang.DynamicClassLoader. cl)))
+    (.setContextClassLoader (Thread/currentThread) (DynamicClassLoader. cl)))
   (let [{:keys [init need-prompt prompt flush read eval print caught]
          :or {init        #()
               need-prompt (if (instance? LineNumberingPushbackReader *in*)
