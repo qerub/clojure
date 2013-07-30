@@ -1094,9 +1094,18 @@ static class InstanceFieldExpr extends FieldExpr implements AssignableExpr{
 		this.tag = tag;
 		if(field == null && RT.booleanCast(RT.WARN_ON_REFLECTION.deref()))
 			{
-			RT.errPrintWriter()
-		      .format("Reflection warning, %s:%d:%d - reference to field %s can't be resolved.\n",
-					  SOURCE_PATH.deref(), line, column, fieldName);
+			if(targetClass == null)
+				{
+				RT.errPrintWriter()
+			      .format("Reflection warning, %s:%d:%d - reference to field %s can't be resolved.\n",
+						  SOURCE_PATH.deref(), line, column, fieldName);
+				}
+			else
+				{
+				RT.errPrintWriter()
+			      .format("Reflection warning, %s:%d:%d - reference to field %s of %s can't be resolved.\n",
+						  SOURCE_PATH.deref(), line, column, fieldName, targetClass.getName());
+				}
 			}
 	}
 
@@ -1402,8 +1411,16 @@ static class InstanceMethodExpr extends MethodExpr{
 			{
 			List methods = Reflector.getMethods(target.getJavaClass(), args.count(), methodName, false);
 			if(methods.isEmpty())
+				{
 				method = null;
-			//throw new IllegalArgumentException("No matching method found");
+				
+				if(RT.booleanCast(RT.WARN_ON_REFLECTION.deref()))
+					{
+					RT.errPrintWriter()
+				      .format("Reflection warning, %s:%d:%d - call to method %s of %s can't be resolved (no such method).\n",
+							  SOURCE_PATH.deref(), line, column, methodName, target.getJavaClass().getName());
+					}
+				}
 			else
 				{
 				int methodidx = 0;
@@ -1427,16 +1444,24 @@ static class InstanceMethodExpr extends MethodExpr{
 					m = Reflector.getAsMethodOfPublicBase(m.getDeclaringClass(), m);
 					}
 				method = m;
+				if(method == null && RT.booleanCast(RT.WARN_ON_REFLECTION.deref()))
+					{
+					RT.errPrintWriter()
+				      .format("Reflection warning, %s:%d:%d - call to method %s of %s can't be resolved (argument types: %s).\n",
+							  SOURCE_PATH.deref(), line, column, methodName, target.getJavaClass().getName(), getTypeStringForArgs(args));
+					}
 				}
 			}
 		else
-			method = null;
-
-		if(method == null && RT.booleanCast(RT.WARN_ON_REFLECTION.deref()))
 			{
-			RT.errPrintWriter()
-		      .format("Reflection warning, %s:%d:%d - call to %s can't be resolved.\n",
-					  SOURCE_PATH.deref(), line, column, methodName);
+			method = null;
+			
+			if(RT.booleanCast(RT.WARN_ON_REFLECTION.deref()))
+				{
+				RT.errPrintWriter()
+			      .format("Reflection warning, %s:%d:%d - call to method %s can't be resolved (target class is unknown).\n",
+						  SOURCE_PATH.deref(), line, column, methodName);
+				}
 			}
 	}
 
@@ -1586,8 +1611,8 @@ static class StaticMethodExpr extends MethodExpr{
 		if(method == null && RT.booleanCast(RT.WARN_ON_REFLECTION.deref()))
 			{
 			RT.errPrintWriter()
-              .format("Reflection warning, %s:%d:%d - call to %s can't be resolved.\n",
-                      SOURCE_PATH.deref(), line, column, methodName);
+              .format("Reflection warning, %s:%d:%d - call to static method %s of %s can't be resolved (argument types: %s).\n",
+                      SOURCE_PATH.deref(), line, column, methodName, c.getName(), getTypeStringForArgs(args));
 			}
 	}
 
@@ -2332,6 +2357,20 @@ static public boolean subsumes(Class[] c1, Class[] c2){
 			}
 		}
 	return better;
+}
+
+static String getTypeStringForArgs(IPersistentVector args){
+	StringBuilder sb = new StringBuilder();
+	sb.append("[");
+	for(int i = 0; i < args.count(); i++)
+		{
+		Expr arg = (Expr) args.nth(i);
+		if (i > 0)
+			sb.append(", ");
+		sb.append(arg.hasJavaClass() ? arg.getJavaClass().getName() : "unknown");
+		}
+	sb.append("]");	
+	return sb.toString();
 }
 
 static int getMatchingParams(String methodName, ArrayList<Class[]> paramlists, IPersistentVector argexprs,
